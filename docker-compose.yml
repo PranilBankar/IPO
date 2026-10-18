@@ -1,0 +1,22 @@
+# Production-style stack: PostgreSQL + FastAPI (with scheduler) + Next.js.
+#   docker compose up -d --build
+#   docker compose exec api python -m ipopilot.cli bootstrap   # first-time data load
+#   docker compose exec api python -m ipopilot.cli train
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: ipopilot, POSTGRES_PASSWORD: ipopilot, POSTGRES_DB: ipopilot }
+    volumes: [pgdata:/var/lib/postgresql/data]
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://ipopilot:ipopilot@db:5432/ipopilot
+      IPOPILOT_CORS_ORIGINS: http://localhost:3000
+    volumes: [apidata:/data]
+    depends_on: [db]
+    ports: ["8000:8000"]
+  web:
+    build: { context: ./frontend, args: { BACKEND_URL: http://api:8000 } }
+    depends_on: [api]
+    ports: ["3000:3000"]
+volumes: { pgdata: {}, apidata: {} }

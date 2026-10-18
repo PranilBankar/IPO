@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ tokens
+   Palette = dataviz reference instance (validated categorical order, blue<->red diverging,
+   fixed status colours). Dark values are their own steps, not an automatic flip. */
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4;
+  --surface-1: #fcfcfb;
+  --surface-2: #f0efec;
+  --border: #e3e2de;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #77766f;
+  --accent: #2a78d6;
+  --accent-ink: #ffffff;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --pos: #2a78d6;        /* diverging: gain */
+  --neg: #e34948;        /* diverging: loss */
+  --mid: #c8c7c1;
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --grid: #e9e8e4;
+  --shadow: 0 1px 2px rgba(16, 16, 12, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface-1: #1a1a19;
+    --surface-2: #242422;
+    --border: #33332f;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #94938a;
+    --accent: #3987e5;
+    --accent-ink: #ffffff;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --pos: #3987e5;
+    --neg: #e66767;
+    --mid: #4a4a46;
+    --good-ink: #5fd35f;
+    --grid: #2a2a27;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface-1: #1a1a19;
+  --surface-2: #242422;
+  --border: #33332f;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #94938a;
+  --accent: #3987e5;
+  --accent-ink: #ffffff;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --pos: #3987e5;
+  --neg: #e66767;
+  --mid: #4a4a46;
+  --good-ink: #5fd35f;
+  --grid: #2a2a27;
+  --shadow: none;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-ink: var(--text-primary);
+  --color-ink-2: var(--text-secondary);
+  --color-ink-3: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-good: var(--good-ink);
+  --color-critical: var(--critical);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+}
+
+html, body { background: var(--bg); color: var(--text-primary); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+.tnum { font-variant-numeric: tabular-nums; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+.input {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.65rem;
+  color: var(--text-primary); width: 100%; font-size: 0.9rem;
+}
+.input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 8px; padding: 0.5rem 0.9rem;
+  font-weight: 600; font-size: 0.875rem; background: var(--accent); color: var(--accent-ink);
+}
+.btn:disabled { opacity: 0.55; }
+.btn-ghost { background: transparent; color: var(--text-primary); border: 1px solid var(--border); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg > button { padding: 0.35rem 0.7rem; font-size: 0.8rem; color: var(--text-secondary); }
+.seg > button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+table.data { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+table.data th { text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.03em; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+table.data td { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.data tr:hover td { background: var(--surface-2); }
+.recharts-cartesian-grid line { stroke: var(--grid); }
+.recharts-text { fill: var(--text-muted); font-size: 11px; }
