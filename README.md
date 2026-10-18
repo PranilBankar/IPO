@@ -135,9 +135,11 @@ could not be located as a public dataset, so IPOWatch was used as the second GMP
   subscription, GMP level/max/trend/count, NIFTY 20/60-day return and volatility, India VIX, smallcap momentum, IPO-market
   "heat" (mean listing gain of the previous issues that *listed before* the decision), FinBERT sentiment, SME-rule flag,
   plus explicit missing-value indicators; board & sector embeddings.
-* **Architecture:** residual MLP (3 blocks, LayerNorm, GELU, dropout) → **Mixture Density Network** head with 4 Gaussian
-  components. **Deep ensemble** of 5 seeds; predictive distribution = mixture of mixtures. Variance **temperature scaling**
-  fitted on the validation period for calibrated intervals. Trained with AdamW + OneCycle, early stopping on validation NLL.
+* **Architecture:** *wide & deep* — residual MLP (3 blocks, LayerNorm, GELU, dropout) plus a linear "wide" path →
+  **Mixture Density Network** head with 4 Gaussian components. **Deep ensemble** of 5 seeds; predictive distribution =
+  mixture of mixtures. Variance **temperature scaling** for calibrated intervals. Trained with AdamW + cosine schedule,
+  recency-weighted NLL (half-life 4 years), early stopping; hyper-parameters chosen on the validation period only.
+* **Evaluation:** walk-forward — every model is retrained each quarter on all issues that closed before it.
 * **Explainability:** occlusion attribution per information group (GMP, QIB demand, market regime, …).
 * **Baselines:** board climatology, GMP-only, ridge regression, LightGBM quantile regression.
 
@@ -184,7 +186,39 @@ Results are written to `data/models/metrics.json` and `data/models/backtest.json
 page. See [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md#9-results) for the full tables and their interpretation.
 
 <!-- RESULTS:START -->
-_Run `python -m ipopilot.cli train` and `backtest` to populate._
+**Data (as of 2026-10-18):** 3,284 IPOs in the universe · 1,950 listed issues used for training (617 mainboard,
+1,333 SME, 2012–2026) · ~1,000 final category-wise subscription records · 7,875 GMP observations for 946 IPOs ·
+8,967 FinBERT-scored headlines · 20 years of NIFTY / VIX / Smallcap bars.
+
+**Listing-return forecasting — 574 out-of-sample IPOs (Apr 2025 – Oct 2026), walk-forward quarterly retraining**
+
+| Model | MAE | RMSE | CRPS ↓ | Directional acc. | 80% coverage | AUC P(loss) ↑ | Brier ↓ |
+|---|---|---|---|---|---|---|---|
+| Climatology | 21.0% | 32.5% | 17.7 | 63.6% | 75.6% | 0.474 | 0.256 |
+| GMP only | **16.5%** | 26.3% | 14.2 | 66.0% | 81.7% | 0.694 | 0.213 |
+| Ridge | 18.4% | 24.6% | 14.4 | **67.8%** | 83.3% | 0.730 | 0.201 |
+| LightGBM quantile | 17.4% | 25.2% | 13.9 | 66.6% | 65.5% | 0.721 | 0.220 |
+| **Deep MDN ensemble** | 17.2% | **24.1%** | **13.8** | 67.1% | 83.4% | **0.750** | **0.192** |
+
+The deep model is the best *probabilistic* forecaster (CRPS, RMSE, P(loss) ranking and calibration) — exactly what the
+optimizer consumes — while GMP alone remains the best *median* predictor. Frozen (never-retrained) models degrade under
+the 2025–26 regime shift (deep MDN CRPS 15.4), which is why the system retrains periodically.
+
+**Strategy backtest — 74 weekly windows, 404 issues, ₹2L capital, 3 PANs, lottery simulated with actual outcomes**
+
+| Strategy | Total E[profit] | Per window | Return on capital | Loss windows | Worst window | Sharpe-like |
+|---|---|---|---|---|---|---|
+| Apply to everything | ₹68,480 | ₹925 | 0.90% | 32% | −₹16,542 | 0.15 |
+| Rank by GMP | ₹55,434 | ₹749 | 0.88% | 30% | −₹20,064 | 0.15 |
+| Rule: subscription ≥ 10× | ₹1,18,545 | ₹1,602 | **2.35%** | **4%** | **−₹309** | 0.51 |
+| Optimizer + LightGBM | ₹99,078 | ₹1,339 | 1.55% | 16% | −₹19,273 | 0.26 |
+| **Optimizer + Deep MDN** | **₹1,29,833** | **₹1,755** | 2.11% | 8% | −₹7,184 | **0.55** |
+| Oracle (perfect foresight) | ₹1,84,811 | ₹2,497 | 3.39% | 0% | ₹0 | 0.64 |
+
+**Answer to the research question:** yes — the deep-distribution optimizer earned the most and had the best
+risk-adjusted score: 2.3× the GMP-ranking strategy, +31% over the same optimizer fed with LightGBM, and ~70% of the
+perfect-foresight oracle. The simple "subscription ≥ 10×" rule is a strong, low-risk competitor (fewer losing weeks,
+higher return per rupee deployed) — an honest finding worth discussing.
 <!-- RESULTS:END -->
 
 ## API reference

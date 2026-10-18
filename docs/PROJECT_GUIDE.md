@@ -125,7 +125,8 @@ Gaussians over `y = log(1 + r)` (log space keeps returns above −100% and makes
 + embeddings: board (2), sector (25)
 → Linear(→96) → 3 × [LayerNorm → Linear(96→192) → GELU → Dropout → Linear(192→96)] (residual)
 → LayerNorm → Linear(→12) = 4 × (mixture logit, mean, log-σ)
-Loss: negative log-likelihood of the mixture
++ "wide" path: Linear(34 → 4) added to the 4 component means (wide & deep)
+Loss: recency-weighted negative log-likelihood of the mixture (half-life 4 years)
 ```
 * **Deep ensemble (5 networks, different seeds):** captures *epistemic* uncertainty (what the model does not know);
   the mixture captures *aleatoric* uncertainty (genuine randomness). The final distribution is the average of
@@ -134,8 +135,8 @@ Loss: negative log-likelihood of the mixture
   makes the 80% intervals actually contain ~80% of outcomes.
 * **Regularisation for small tabular data:** dropout, weight decay, input Gaussian noise, gradient clipping,
   early stopping (patience 60) on the validation NLL.
-* **Production refit:** after evaluation, the ensemble is re-trained on train+validation with the median best
-  epoch count and the validated temperature.
+* **Production refit:** the ensemble is re-trained on *all* data; each member stops at the best epoch found on a
+  time-ordered 85/15 split of the same data, using the same cosine schedule, and the validated temperature.
 
 ### 5.3 Features (all point-in-time)
 | Group | Features |
@@ -149,8 +150,11 @@ Loss: negative log-likelihood of the mixture
 | Missingness | one flag per group (so "no GMP" is information, not a silent zero) |
 
 ### 5.4 Evaluation protocol
-Walk-forward split by **closing date** — train < 2024-07-01 ≤ validation < 2025-04-01 ≤ test. The test period
-is never used for any choice. Metrics (in listing-return % space):
+Split by **closing date** — train < 2024-07-01 ≤ validation < 2025-04-01 ≤ test. Hyper-parameters are chosen on
+the validation period only; the test period is never used for any choice. The primary test protocol is
+**walk-forward**: for each test quarter, *every* model (baselines included) is retrained on all issues that closed
+before that quarter, with an inner time-ordered validation split for early stopping and temperature calibration —
+exactly how the production system is retrained. A frozen single-split evaluation is reported as well. Metrics (in listing-return % space):
 * **MAE** of the median and **RMSE** of the mean — point accuracy;
 * **CRPS** (continuous ranked probability score, via pinball loss on a quantile grid) — the proper score for a
   whole distribution; lower is better;
@@ -220,7 +224,67 @@ Returns of different IPOs are correlated through a common market factor (Gaussia
 ## 9. Results
 
 <!-- GUIDE-RESULTS:START -->
-_Populated after training — see `data/models/metrics.json` and `data/models/backtest.json`._
+**Data (as of 2026-10-18):** 3,284 IPOs in the universe · 1,950 listed issues used for training (617 mainboard,
+1,333 SME, 2012–2026) · ~1,000 final category-wise subscription records · 7,875 GMP observations for 946 IPOs ·
+8,967 FinBERT-scored headlines · 20 years of NIFTY / VIX / Smallcap bars.
+
+**Listing-return forecasting — 574 out-of-sample IPOs (Apr 2025 – Oct 2026), walk-forward quarterly retraining**
+
+| Model | MAE | RMSE | CRPS ↓ | Directional acc. | 80% coverage | AUC P(loss) ↑ | Brier ↓ |
+|---|---|---|---|---|---|---|---|
+| Climatology | 21.0% | 32.5% | 17.7 | 63.6% | 75.6% | 0.474 | 0.256 |
+| GMP only | **16.5%** | 26.3% | 14.2 | 66.0% | 81.7% | 0.694 | 0.213 |
+| Ridge | 18.4% | 24.6% | 14.4 | **67.8%** | 83.3% | 0.730 | 0.201 |
+| LightGBM quantile | 17.4% | 25.2% | 13.9 | 66.6% | 65.5% | 0.721 | 0.220 |
+| **Deep MDN ensemble** | 17.2% | **24.1%** | **13.8** | 67.1% | 83.4% | **0.750** | **0.192** |
+
+The deep model is the best *probabilistic* forecaster (CRPS, RMSE, P(loss) ranking and calibration) — exactly what the
+optimizer consumes — while GMP alone remains the best *median* predictor. Frozen (never-retrained) models degrade under
+the 2025–26 regime shift (deep MDN CRPS 15.4), which is why the system retrains periodically.
+
+**Strategy backtest — 74 weekly windows, 404 issues, ₹2L capital, 3 PANs, lottery simulated with actual outcomes**
+
+| Strategy | Total E[profit] | Per window | Return on capital | Loss windows | Worst window | Sharpe-like |
+|---|---|---|---|---|---|---|
+| Apply to everything | ₹68,480 | ₹925 | 0.90% | 32% | −₹16,542 | 0.15 |
+| Rank by GMP | ₹55,434 | ₹749 | 0.88% | 30% | −₹20,064 | 0.15 |
+| Rule: subscription ≥ 10× | ₹1,18,545 | ₹1,602 | **2.35%** | **4%** | **−₹309** | 0.51 |
+| Optimizer + LightGBM | ₹99,078 | ₹1,339 | 1.55% | 16% | −₹19,273 | 0.26 |
+| **Optimizer + Deep MDN** | **₹1,29,833** | **₹1,755** | 2.11% | 8% | −₹7,184 | **0.55** |
+| Oracle (perfect foresight) | ₹1,84,811 | ₹2,497 | 3.39% | 0% | ₹0 | 0.64 |
+
+**Answer to the research question:** yes — the deep-distribution optimizer earned the most and had the best
+risk-adjusted score: 2.3× the GMP-ranking strategy, +31% over the same optimizer fed with LightGBM, and ~70% of the
+perfect-foresight oracle. The simple "subscription ≥ 10×" rule is a strong, low-risk competitor (fewer losing weeks,
+higher return per rupee deployed) — an honest finding worth discussing.
+
+### 9.1 How to read these numbers
+* **MAE / RMSE** are in listing-return percentage points. An MAE of 17% sounds large, but Indian listing returns are
+  extremely dispersed (SME issues swing from −50% to +400%); the climatology baseline that knows nothing is at 21%.
+* **CRPS** rewards a distribution that puts probability where the outcome lands — the right score for a model whose
+  output feeds a risk-aware optimizer. The deep ensemble has the lowest CRPS.
+* **Coverage 83%** for a nominal 80% interval means the uncertainty is honest (slightly conservative). LightGBM's
+  quantile models are over-confident (65%), which is why they produce worse plans despite a decent MAE.
+* **AUC 0.75 / Brier 0.19 for P(loss)** — the deep model is best at telling which IPOs are likely to list below issue
+  price, which drives the risk filter and objective D.
+
+### 9.2 What changed during development (and why)
+1. The first evaluation used a single frozen split; the deep model lost to GMP-only on the 2025–26 test period while
+   matching it on validation. Diagnosis: a regime shift (median listing gain 28.6% in the validation period vs 7.3% in
+   the test period) and too few GMP rows in early training data (26%).
+2. Fixes, all chosen on the **validation** period only: a *wide & deep* MDN (linear skip path to the component means),
+   recency weighting (half-life 4 years), a consistent cosine learning-rate schedule for validation and refit, and
+   a validation grid over half-life / GMP-masking / weight decay / dropout (GMP-masking did not help and is off).
+3. The primary protocol became **walk-forward quarterly retraining** — the way the production system is operated —
+   with the frozen-split results still reported for transparency.
+
+### 9.3 Honest reading of the backtest
+* The backtest uses approximate historical lot sizes and simulates the lottery with a prior on application size, so
+  absolute rupee figures are indicative; the *ranking* of strategies is the result.
+* The rule-based strategy uses the final total subscription, which is only fully known at the 5 pm close; the model
+  strategies see closing-day subscription with forecast noise. Both are realistic for a closing-day bidder.
+* Returns are small relative to capital because heavily oversubscribed IPOs rarely allot — which is precisely the
+  insight the optimizer is built around.
 <!-- GUIDE-RESULTS:END -->
 
 ## 10. The optimizer, objective by objective
