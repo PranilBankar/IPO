@@ -40,9 +40,16 @@ export default function ModelPage() {
             <Stat label="GMP coverage (test)" value={prob(m.gmp_coverage.test, 0)} hint={`train ${prob(m.gmp_coverage.train, 0)}`} />
             <Stat label="Variance temperature" value={m.temperature.toFixed(2)} hint="fitted on validation NLL" />
           </div>
-          <Card title="Listing-return forecasting — out-of-sample test" subtitle="Lower is better for MAE / RMSE / CRPS / Brier; coverage should be close to 80%. Best in bold.">
+          <Card title="Listing-return forecasting — out-of-sample test (walk-forward)"
+            subtitle={`${m.protocol ?? "walk-forward"}. Lower is better for MAE / RMSE / CRPS / Brier; coverage should be close to 80%. Best in bold.`}>
             <MetricsTable rows={m.test_metrics} bestOf={bestOf} />
           </Card>
+          {m.test_metrics_static?.length > 0 && (
+            <Card title="Frozen split (no retraining) — for transparency"
+              subtitle={`Models trained once on data before ${m.split?.test ?? "2025-04-01"} and never updated. Shows how much a regime shift hurts a frozen model.`}>
+              <MetricsTable rows={m.test_metrics_static} bestOf={bestOf} />
+            </Card>
+          )}
           {m.test_metrics_gmp_subset?.length > 0 && (
             <Card title="Same metrics on issues where GMP was available" subtitle="The fair comparison against the GMP-only heuristic.">
               <MetricsTable rows={m.test_metrics_gmp_subset} bestOf={bestOf} />

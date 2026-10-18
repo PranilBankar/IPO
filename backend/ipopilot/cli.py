@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> None:
     nw.add_argument("--history", action="store_true", help="also fetch headlines for listed IPOs since 2023")
     nw.add_argument("--limit", type=int, default=400)
     tr = sub.add_parser("train")
-    tr.add_argument("--epochs", type=int, default=400)
+    tr.add_argument("--epochs", type=int, default=200)
     tr.add_argument("--ensemble", type=int, default=5)
     sub.add_parser("backtest")
     sub.add_parser("predict")

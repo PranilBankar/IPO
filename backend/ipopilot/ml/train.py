@@ -1,8 +1,12 @@
 """Train and evaluate listing-return models with a strict walk-forward time split.
 
     train : close_date <  2024-07-01
-    valid : 2024-07-01 .. 2025-03-31   (early stopping, variance calibration)
+    valid : 2024-07-01 .. 2025-03-31   (hyper-parameter selection, variance calibration)
     test  : close_date >= 2025-04-01   (never touched during model selection)
+
+Primary test protocol = WALK-FORWARD: for each test quarter every model is retrained on all
+issues that closed before that quarter (exactly how the production system is retrained), with
+an inner time-ordered validation split for early stopping. The frozen static split is also reported.
 
 Models compared (all produce a predictive distribution):
     climatology   board-wise historical distribution (no issue information)
@@ -154,14 +158,30 @@ def baseline_lgbm(tr, te, va):
 
 
 # --------------------------------------------------------------------------- deep model
-def fit_ensemble(tr, va, n: int, epochs: int, fixed_epochs: int | None = None, pre: Preprocessor | None = None):
+# hyper-parameters selected on the VALIDATION period only (see docs/PROJECT_GUIDE.md §5.4)
+RECENCY_HALF_LIFE_Y = 4.0
+GMP_MASK_P = 0.0
+WEIGHT_DECAY = 1e-3
+
+
+def recency_weights(df: pd.DataFrame, ref: dt.date | None = None) -> np.ndarray:
+    ref = ref or max(df["close_date"])
+    age = np.array([(ref - d).days / 365.25 for d in df["close_date"]])
+    return 0.5 ** (np.clip(age, 0, None) / RECENCY_HALF_LIFE_Y)
+
+
+def fit_ensemble(tr, va, n: int, epochs: int, fixed_epochs: list[int] | int | None = None,
+                 pre: Preprocessor | None = None):
     pre = pre or Preprocessor().fit(tr)
+    w = recency_weights(tr)
     members, eps = [], []
     for seed in range(n):
-        m, ep, best = train_member(pre, tr, va, seed=seed, epochs=epochs, arch=ARCH, fixed_epochs=fixed_epochs)
+        fe = fixed_epochs[seed] if isinstance(fixed_epochs, list) else fixed_epochs
+        m, ep, best = train_member(pre, tr, va, seed=seed, epochs=epochs, arch=ARCH, fixed_epochs=fe,
+                                   weights=w, gmp_mask_p=GMP_MASK_P, wd=WEIGHT_DECAY)
         members.append(m)
         eps.append(ep)
-        log.info("member %d: best_epoch=%d val_nll=%.4f", seed, ep, best)
+        log.info("member %d: best_epoch=%d%s", seed, ep, f" val_nll={best:.4f}" if va is not None else " (refit)")
     return ListingEnsemble(pre, members, 1.0, {"arch": ARCH}), eps
 
 
@@ -188,7 +208,30 @@ def build_frame() -> pd.DataFrame:
     return fb.training_frame()
 
 
-def train_all(epochs: int = 400, ensemble: int = 5) -> dict:
+MODELS = ["climatology", "gmp_only", "ridge", "lightgbm", "deep_mdn"]
+
+
+def fit_predict_all(hist: pd.DataFrame, target: pd.DataFrame, ensemble: int, epochs: int,
+                    inner_valid_frac: float = 0.15) -> tuple[dict, dict]:
+    """Train every model on `hist` only (inner time-ordered validation split for early stopping
+    and calibration) and predict `target`. Returns ({model: (q, mean, p_loss)}, info)."""
+    hist = hist.sort_values("close_date").reset_index(drop=True)
+    cut = int(len(hist) * (1 - inner_valid_frac))
+    itr, iva = hist.iloc[:cut].reset_index(drop=True), hist.iloc[cut:].reset_index(drop=True)
+    out = {
+        "climatology": baseline_climatology(hist, target),
+        "gmp_only": baseline_gmp(hist, target),
+        "ridge": baseline_ridge(hist, target, Preprocessor().fit(hist)),
+    }
+    q, m, p, lgbm_mean = baseline_lgbm(itr, target, iva)
+    out["lightgbm"] = (q, m, p)
+    ens, eps = fit_ensemble(itr, iva, ensemble, epochs, pre=Preprocessor().fit(itr))
+    ens.temp = calibrate_temperature(ens, iva)
+    out["deep_mdn"] = ensemble_outputs(ens, target)
+    return out, {"ens": ens, "epochs": eps, "temp": ens.temp, "lgbm": lgbm_mean}
+
+
+def train_all(epochs: int = 200, ensemble: int = 5) -> dict:
     df = build_frame()
     df["close_date"] = pd.to_datetime(df["close_date"]).dt.date
     tr = df[df["close_date"] < SPLIT_VALID].reset_index(drop=True)
@@ -196,37 +239,40 @@ def train_all(epochs: int = 400, ensemble: int = 5) -> dict:
     te = df[df["close_date"] >= SPLIT_TEST].reset_index(drop=True)
     log.info("rows: train=%d valid=%d test=%d (gmp coverage test=%.0f%%)", len(tr), len(va), len(te),
              100 * (te["gmp_missing"] == 0).mean())
-    yte = np.expm1(te["y"].to_numpy())
-    boards = te["board"].to_numpy()
 
-    results, preds = [], {}
-    q, m, p = baseline_climatology(tr, te)
-    results.append(evaluate("climatology", yte, q, m, p, boards)); preds["climatology"] = (q, m, p)
-    q, m, p = baseline_gmp(tr, te)
-    results.append(evaluate("gmp_only", yte, q, m, p, boards)); preds["gmp_only"] = (q, m, p)
-    pre = Preprocessor().fit(tr)
-    q, m, p = baseline_ridge(tr, te, pre)
-    results.append(evaluate("ridge", yte, q, m, p, boards)); preds["ridge"] = (q, m, p)
-    q, m, p, lgbm_mean = baseline_lgbm(tr, te, va)
-    results.append(evaluate("lightgbm", yte, q, m, p, boards)); preds["lightgbm"] = (q, m, p)
+    # ---- (1) walk-forward evaluation: every model retrained each quarter on all data before it
+    quarters = sorted({(d.year, (d.month - 1) // 3) for d in te["close_date"]})
+    wf_rows, wf_preds = [], {k: [] for k in MODELS}
+    for (y, qn) in quarters:
+        q_start = dt.date(y, 3 * qn + 1, 1)
+        q_end = dt.date(y + 1, 1, 1) if qn == 3 else dt.date(y, 3 * qn + 4, 1)
+        target = te[(te["close_date"] >= q_start) & (te["close_date"] < q_end)].reset_index(drop=True)
+        if target.empty:
+            continue
+        hist = df[df["close_date"] < q_start]
+        log.info("walk-forward %d-Q%d: train on %d issues, predict %d", y, qn + 1, len(hist), len(target))
+        preds, _ = fit_predict_all(hist, target, ensemble, epochs)
+        for k in MODELS:
+            wf_preds[k].append(preds[k])
+        wf_rows.append(target)
+    wf = pd.concat(wf_rows, ignore_index=True)
+    cat = {k: tuple(np.concatenate([p[j] for p in wf_preds[k]]) for j in range(3)) for k in MODELS}
+    yte = np.expm1(wf["y"].to_numpy())
+    boards = wf["board"].to_numpy()
+    results = [evaluate(k, yte, *cat[k], boards) for k in MODELS]
+    sub = wf["gmp_missing"].to_numpy() == 0
+    subset = ([evaluate(k, yte[sub], cat[k][0][sub], cat[k][1][sub], cat[k][2][sub]) for k in MODELS]
+              if sub.sum() > 20 else [])
 
-    ens, eps = fit_ensemble(tr, va, ensemble, epochs, pre=pre)
-    ens.temp = calibrate_temperature(ens, va)
-    q, m, p = ensemble_outputs(ens, te)
-    results.append(evaluate("deep_mdn", yte, q, m, p, boards)); preds["deep_mdn"] = (q, m, p)
+    # ---- (2) static split (train+valid -> frozen -> whole test), reported for transparency
+    static_preds, info = fit_predict_all(pd.concat([tr, va]), te, ensemble, epochs)
+    static = [evaluate(k, np.expm1(te["y"].to_numpy()), *static_preds[k], te["board"].to_numpy()) for k in MODELS]
 
-    # GMP-available subset (where the popular heuristic is actually applicable)
-    sub = te["gmp_missing"].to_numpy() == 0
-    subset = []
-    if sub.sum() > 20:
-        for name, (q, m, p) in preds.items():
-            subset.append(evaluate(name, yte[sub], q[sub], m[sub], p[sub]))
-
-    # ---- save test-period predictions for the strategy backtest
+    # ---- save walk-forward predictions for the strategy backtest
     out_dir = settings.models_dir
-    rows = te[["slug", "board", "close_date", "gain_pct", "log_sub_rii", "log_sub_total", "log_price",
+    rows = wf[["slug", "board", "close_date", "gain_pct", "log_sub_rii", "log_sub_total", "log_price",
                "gmp_last_pct", "gmp_missing"]].copy()
-    for name, (q, m, p) in preds.items():
+    for name, (q, m, p) in cat.items():
         rows[f"{name}_mean"] = m
         rows[f"{name}_q10"] = q[:, 0]
         rows[f"{name}_q50"] = q[:, 4]
@@ -234,26 +280,32 @@ def train_all(epochs: int = 400, ensemble: int = 5) -> dict:
         rows[f"{name}_ploss"] = p
     rows.to_pickle(out_dir / "test_predictions.pkl")
 
-    # ---- production refit on train+valid with the selected number of epochs
-    full = pd.concat([tr, va], ignore_index=True)
-    fixed = int(np.median(eps))
-    prod, _ = fit_ensemble(full, None, ensemble, epochs, fixed_epochs=max(fixed, 40))
-    prod.temp = ens.temp
+    # ---- (3) production model on ALL data; each member stops at its validated best epoch
+    full = df.sort_values("close_date").reset_index(drop=True)
+    cut = int(len(full) * 0.85)
+    f_tr, f_va = full.iloc[:cut].reset_index(drop=True), full.iloc[cut:].reset_index(drop=True)
+    ens_v, eps = fit_ensemble(f_tr, f_va, ensemble, epochs)
+    temp = calibrate_temperature(ens_v, f_va)
+    prod, _ = fit_ensemble(full, None, ensemble, epochs, fixed_epochs=[max(e, 5) for e in eps])
+    prod.temp = temp
     version = f"deep_mdn_{dt.date.today():%Y%m%d}"
-    prod.meta.update({"version": version, "trained_rows": len(full), "epochs": fixed, "temp": ens.temp,
-                      "split": {"valid": str(SPLIT_VALID), "test": str(SPLIT_TEST)},
-                      "features": NUMERIC_FEATURES})
+    prod.meta.update({"version": version, "trained_rows": len(full), "epochs": eps, "temp": temp,
+                      "recency_half_life_years": RECENCY_HALF_LIFE_Y,
+                      "split": {"valid": str(SPLIT_VALID), "test": str(SPLIT_TEST)}, "features": NUMERIC_FEATURES})
     prod.save(out_dir / "listing_current")
 
-    # residual-based reference for the frontend: feature importance via LightGBM gain
-    imp = sorted(zip(NUMERIC_FEATURES + ["board_code"], lgbm_mean.booster_.feature_importance("gain").tolist()),
+    imp = sorted(zip(NUMERIC_FEATURES + ["board_code"], info["lgbm"].booster_.feature_importance("gain").tolist()),
                  key=lambda x: -x[1])
     report = {
         "version": version, "created": dt.datetime.now().isoformat(timespec="seconds"),
+        "protocol": "walk-forward: every model retrained each quarter on all issues that closed before it",
         "rows": {"train": len(tr), "valid": len(va), "test": len(te)},
+        "split": {"valid": str(SPLIT_VALID), "test": str(SPLIT_TEST)},
         "gmp_coverage": {k: float((d["gmp_missing"] == 0).mean()) for k, d in (("train", tr), ("valid", va), ("test", te))},
-        "temperature": ens.temp, "ensemble_size": ensemble, "best_epochs": eps,
-        "test_metrics": results, "test_metrics_gmp_subset": subset,
+        "temperature": temp, "ensemble_size": ensemble, "best_epochs": eps,
+        "hyperparameters": {"recency_half_life_years": RECENCY_HALF_LIFE_Y, "gmp_mask_p": GMP_MASK_P,
+                            "weight_decay": WEIGHT_DECAY, **ARCH},
+        "test_metrics": results, "test_metrics_gmp_subset": subset, "test_metrics_static": static,
         "lightgbm_feature_gain": [{"feature": f, "gain": float(g)} for f, g in imp[:20]],
     }
     (out_dir / "metrics.json").write_text(json.dumps(report, indent=2))

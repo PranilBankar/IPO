@@ -88,6 +88,10 @@ class ListingMDN(nn.Module):
         self.blocks = nn.Sequential(*[ResBlock(d, p) for _ in range(blocks)])
         self.norm = nn.LayerNorm(d)
         self.head = nn.Linear(d, 3 * k)
+        # "wide" path: a linear map from the raw (standardised) inputs to the component means
+        # makes simple monotone relations (listing ≈ GMP) trivially learnable on small data
+        self.wide = nn.Linear(n_num, k)
+        nn.init.zeros_(self.wide.weight)
         self.k = k
 
     def forward(self, x_num, x_cat):
@@ -96,6 +100,7 @@ class ListingMDN(nn.Module):
         h = self.norm(self.blocks(F.gelu(h)))
         out = self.head(h)
         logit_pi, mu, log_sigma = out.split(self.k, dim=1)
+        mu = mu + self.wide(x_num)
         log_sigma = torch.clamp(log_sigma, -4.5, 1.5)
         return logit_pi, mu, log_sigma
 
@@ -242,20 +247,39 @@ class ListingEnsemble:
         return cls(pre, members, cfg["temp"], cfg["meta"])
 
 
-def train_member(pre: Preprocessor, tr: pd.DataFrame, va: pd.DataFrame | None, seed: int, epochs: int = 400,
-                 lr: float = 2e-3, wd: float = 1e-3, batch: int = 128, arch: dict | None = None,
-                 patience: int = 60, fixed_epochs: int | None = None) -> tuple[ListingMDN, int, float]:
+GMP_COLS = [c for c in NUMERIC_FEATURES if c.startswith("gmp_") and c != "gmp_missing"]
+
+
+def train_member(pre: Preprocessor, tr: pd.DataFrame, va: pd.DataFrame | None, seed: int, epochs: int = 200,
+                 lr: float = 1.5e-3, wd: float = 1e-3, batch: int = 128, arch: dict | None = None,
+                 patience: int = 40, fixed_epochs: int | None = None, weights: np.ndarray | None = None,
+                 gmp_mask_p: float = 0.0) -> tuple[ListingMDN, int, float]:
+    """Train one ensemble member.
+
+    * cosine LR schedule over `epochs` — identical for the validation run and the production
+      refit (which simply stops at the validated best epoch via `fixed_epochs`)
+    * optional per-sample weights (recency weighting for regime shift)
+    * GMP-masking augmentation: with prob. `gmp_mask_p` a row's GMP features are replaced by the
+      'missing' encoding, so the network learns both regimes (with and without GMP)
+    """
     arch = arch or {}
     torch.manual_seed(seed)
     np.random.seed(seed)
     xtr, ctr = pre.transform(tr)
     ytr = torch.tensor(tr["y"].to_numpy(), dtype=torch.float32)
+    wtr = torch.tensor(weights if weights is not None else np.ones(len(tr)), dtype=torch.float32)
+    wtr = wtr / wtr.mean()
     model = ListingMDN(xtr.shape[1], [len(pre.vocab[c]) for c in CATEGORICAL], d=arch.get("d", 96),
                        k=arch.get("k", 4), blocks=arch.get("blocks", 3), p=arch.get("p", 0.15)).to(DEVICE)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=lr * 0.02)
     n_ep = fixed_epochs or epochs
-    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=n_ep * max(1, math.ceil(len(tr) / batch)))
-    xtr, ctr, ytr = xtr.to(DEVICE), ctr.to(DEVICE), ytr.to(DEVICE)
+    gidx = torch.tensor([NUMERIC_FEATURES.index(c) for c in GMP_COLS], device=DEVICE)
+    miss_j = NUMERIC_FEATURES.index("gmp_missing")
+    miss_z = float(np.clip((1.0 - pre.means["gmp_missing"]) / pre.stds["gmp_missing"], -6, 6))
+    has_gmp = (pd.to_numeric(tr["gmp_missing"]).to_numpy() == 0)
+    has_gmp = torch.tensor(has_gmp, device=DEVICE)
+    xtr, ctr, ytr, wtr = xtr.to(DEVICE), ctr.to(DEVICE), ytr.to(DEVICE), wtr.to(DEVICE)
     if va is not None:
         xva, cva = (t.to(DEVICE) for t in pre.transform(va))
         yva = torch.tensor(va["y"].to_numpy(), dtype=torch.float32, device=DEVICE)
@@ -266,14 +290,18 @@ def train_member(pre: Preprocessor, tr: pd.DataFrame, va: pd.DataFrame | None, s
         perm = torch.randperm(len(ytr), generator=g).to(DEVICE)
         for i in range(0, len(perm), batch):
             idx = perm[i:i + batch]
-            # light input noise as regularisation for a small tabular dataset
             xb = xtr[idx] + 0.03 * torch.randn_like(xtr[idx])
-            loss = mdn_nll(*model(xb, ctr[idx]), ytr[idx]).mean()
+            if gmp_mask_p > 0:
+                m = has_gmp[idx] & (torch.rand(len(idx), device=DEVICE) < gmp_mask_p)
+                if m.any():
+                    xb[m.nonzero(as_tuple=True)[0].unsqueeze(1), gidx.unsqueeze(0)] = 0.0
+                    xb[m, miss_j] = miss_z
+            loss = (mdn_nll(*model(xb, ctr[idx]), ytr[idx]) * wtr[idx]).mean()
             opt.zero_grad()
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 2.0)
             opt.step()
-            sched.step()
+        sched.step()
         if va is not None and fixed_epochs is None:
             model.eval()
             with torch.no_grad():
