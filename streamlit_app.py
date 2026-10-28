@@ -160,6 +160,24 @@ def format_pct(val: float | None, sign: bool = True) -> str:
     return f"{prefix}{val:.1f}%"
 
 
+def extract_latest_gmp(r: dict) -> tuple[float | None, float | None]:
+    """Returns (gmp_rs, gmp_pct) safely regardless of whether gmp_latest is a list, dict, or None."""
+    gmp_latest = r.get("gmp_latest")
+    gmp_rs = None
+    gmp_pct = r.get("gmp_consensus_pct")
+    if isinstance(gmp_latest, list) and gmp_latest:
+        last_obs = gmp_latest[-1]
+        if isinstance(last_obs, dict):
+            gmp_rs = last_obs.get("gmp_rs")
+            if gmp_pct is None:
+                gmp_pct = last_obs.get("gmp_pct")
+    elif isinstance(gmp_latest, dict):
+        gmp_rs = gmp_latest.get("gmp_rs")
+        if gmp_pct is None:
+            gmp_pct = gmp_latest.get("gmp_pct")
+    return gmp_rs, gmp_pct
+
+
 # Run DB bootstrap
 db_ready = bootstrap_database()
 
@@ -317,7 +335,10 @@ if page == "📊 Live IPO Intelligence":
     open_items = [i for i in items if i.get("stage") == "open"]
     best_ev_item = None
     if open_items:
-        valid_evs = [i for i in open_items if (i.get("min_application_ev") or {}).get("ev_per_rupee") is not None]
+        valid_evs = [
+            i for i in open_items
+            if isinstance(i.get("min_application_ev"), dict) and i["min_application_ev"].get("ev_per_rupee") is not None
+        ]
         if valid_evs:
             best_ev_item = max(valid_evs, key=lambda x: x["min_application_ev"]["ev_per_rupee"])
 
@@ -382,13 +403,17 @@ if page == "📊 Live IPO Intelligence":
             pred = r.get("prediction") or {}
             sub = r.get("subscription") or {}
             ev = r.get("min_application_ev") or {}
-            gmp_rs = (r.get("gmp_latest") or {}).get("gmp_rs")
-            gmp_pct = r.get("gmp_consensus_pct")
+            allot = r.get("allotment") or {}
+
+            gmp_rs, gmp_pct = extract_latest_gmp(r)
 
             p_mean = pred.get("mean_pct")
             q10 = pred.get("q10_pct")
             q90 = pred.get("q90_pct")
             pred_range = f"[{q10:.0f}% to {q90:.0f}%]" if (q10 is not None and q90 is not None) else "—"
+
+            p_allot = allot.get("p_mean") if isinstance(allot, dict) else None
+            ev_val = ev.get("ev_rupees") if isinstance(ev, dict) else None
 
             rows_display.append({
                 "IPO Name": r.get("name"),
@@ -397,13 +422,13 @@ if page == "📊 Live IPO Intelligence":
                 "Dates": f"{r.get('open_date') or ''} → {r.get('close_date') or ''}",
                 "Price (₹)": f"₹{r.get('price') or r.get('price_high') or '—'}",
                 "Min ₹": format_inr(r.get("min_investment")),
-                "Total Sub": f"{sub.get('total'):.2f}x" if sub.get("total") is not None else "—",
-                "GMP (₹)": f"₹{gmp_rs:.0f} ({gmp_pct:.1f}%)" if gmp_rs is not None and gmp_pct is not None else "—",
+                "Total Sub": f"{sub.get('total'):.2f}x" if (isinstance(sub, dict) and sub.get('total') is not None) else "—",
+                "GMP (₹)": f"₹{gmp_rs:.0f} ({gmp_pct:.1f}%)" if (gmp_rs is not None and gmp_pct is not None) else (f"₹{gmp_rs:.0f}" if gmp_rs is not None else "—"),
                 "AI Expected Pop": format_pct(p_mean),
                 "80% Conf. Range": pred_range,
-                "P(Loss)": f"{pred.get('p_loss', 0)*100:.1f}%" if pred.get("p_loss") is not None else "—",
-                "Allotment Odds": f"{r.get('allotment', {}).get('p_mean', 0)*100:.1f}%" if r.get("allotment") else "—",
-                "Expected Profit (1 lot)": format_inr(ev.get("ev_rupees")),
+                "P(Loss)": f"{(pred.get('p_loss') or 0)*100:.1f}%" if pred.get("p_loss") is not None else "—",
+                "Allotment Odds": f"{p_allot*100:.1f}%" if p_allot is not None else "—",
+                "Expected Profit (1 lot)": format_inr(ev_val),
                 "slug": r.get("slug"),
             })
 
@@ -629,10 +654,11 @@ elif page == "🔬 IPO Deep Dive & What-If":
 
                             st.success("Simulation complete!")
                             r1, r2, r3, r4 = st.columns(4)
-                            r1.metric("Simulated Return", format_pct(s_pred.get("mean_pct")), delta=f"{(s_pred.get('mean_pct', 0) - pred.get('mean_pct', 0)):.1f}%")
-                            r2.metric("P(Loss)", f"{s_pred.get('p_loss', 0)*100:.1f}%", delta=f"{(s_pred.get('p_loss', 0) - pred.get('p_loss', 0))*100:.1f}%", delta_color="inverse")
-                            r3.metric("Retail Allotment Odds", f"{sim_detail.get('allotment', {}).get('p_mean', 0)*100:.1f}%")
-                            r4.metric("Simulated Profit / Lot", format_inr(s_ev.get("ev_rupees")))
+                            r1.metric("Simulated Return", format_pct(s_pred.get("mean_pct")), delta=f"{(s_pred.get('mean_pct', 0) - (pred.get('mean_pct') or 0)):.1f}%")
+                            r2.metric("P(Loss)", f"{(s_pred.get('p_loss') or 0)*100:.1f}%", delta=f"{((s_pred.get('p_loss') or 0) - (pred.get('p_loss') or 0))*100:.1f}%", delta_color="inverse")
+                            s_allot = (sim_detail.get("allotment") or {}).get("p_mean")
+                            r3.metric("Retail Allotment Odds", f"{s_allot*100:.1f}%" if s_allot is not None else "—")
+                            r4.metric("Simulated Profit / Lot", format_inr(s_ev.get("ev_rupees") if isinstance(s_ev, dict) else None))
 
             with tab_data:
                 st.markdown("#### 📰 Recent News & Sentiment")
