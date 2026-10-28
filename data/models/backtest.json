@@ -1,0 +1,102 @@
+{
+  "created": "2026-10-27T23:26:59",
+  "capital": 200000,
+  "applicants": 3,
+  "n_issues": 404,
+  "summary": [
+    {
+      "strategy": "apply_all",
+      "windows": 74,
+      "active_windows": 63,
+      "total_expected_profit": 68480.25945137565,
+      "mean_profit_per_window": 925.4089115050763,
+      "std_profit_per_window": 6081.629368450583,
+      "sharpe_like": 0.15216463474505398,
+      "loss_window_share": 0.32432432432432434,
+      "worst_window": -16541.569118312498,
+      "p5_window": -7645.3396070624985,
+      "avg_capital_deployed": 120542.4619047619,
+      "return_on_capital_pct": 0.9017471752972308,
+      "mean_p_any_allotment": 0.6390878378378377
+    },
+    {
+      "strategy": "gmp_rank",
+      "windows": 74,
+      "active_windows": 58,
+      "total_expected_profit": 55434.375143049925,
+      "mean_profit_per_window": 749.1131776087827,
+      "std_profit_per_window": 5029.887571327729,
+      "sharpe_like": 0.1489323900357162,
+      "loss_window_share": 0.2972972972972973,
+      "worst_window": -20064.175356810003,
+      "p5_window": -4047.813779631249,
+      "avg_capital_deployed": 108380.08103448276,
+      "return_on_capital_pct": 0.8818641576482892,
+      "mean_p_any_allotment": 0.5310810810810811
+    },
+    {
+      "strategy": "rule_based",
+      "windows": 74,
+      "active_windows": 49,
+      "total_expected_profit": 118544.91495945626,
+      "mean_profit_per_window": 1601.9583102629224,
+      "std_profit_per_window": 3151.6693399478813,
+      "sharpe_like": 0.5082888264824804,
+      "loss_window_share": 0.04054054054054054,
+      "worst_window": -308.97496824999996,
+      "p5_window": 0.0,
+      "avg_capital_deployed": 103030.97959183673,
+      "return_on_capital_pct": 2.3481131484419047,
+      "mean_p_any_allotment": 0.3139527027027027
+    },
+    {
+      "strategy": "lightgbm_opt",
+      "windows": 74,
+      "active_windows": 57,
+      "total_expected_profit": 99078.35843091525,
+      "mean_profit_per_window": 1338.8967355529087,
+      "std_profit_per_window": 5245.689106869044,
+      "sharpe_like": 0.2552375309088888,
+      "loss_window_share": 0.16216216216216217,
+      "worst_window": -19273.348064870006,
+      "p5_window": -2869.9482663093127,
+      "avg_capital_deployed": 112167.97719298246,
+      "return_on_capital_pct": 1.549655131595088,
+      "mean_p_any_allotment": 0.5038175675675676
+    },
+    {
+      "strategy": "deep_mdn_opt",
+      "windows": 74,
+      "active_windows": 52,
+      "total_expected_profit": 129833.47660435263,
+      "mean_profit_per_window": 1754.5064405993598,
+      "std_profit_per_window": 3190.7445581576458,
+      "sharpe_like": 0.5498736763849319,
+      "loss_window_share": 0.08108108108108109,
+      "worst_window": -7184.4898702499995,
+      "p5_window": -233.01357695931262,
+      "avg_capital_deployed": 118580.87884615384,
+      "return_on_capital_pct": 2.1055651225575014,
+      "mean_p_any_allotment": 0.4019256756756757
+    },
+    {
+      "strategy": "oracle",
+      "windows": 74,
+      "active_windows": 55,
+      "total_expected_profit": 184810.99453700738,
+      "mean_profit_per_window": 2497.4458721217215,
+      "std_profit_per_window": 3901.472829211088,
+      "sharpe_like": 0.6401289926775492,
+      "loss_window_share": 0.0,
+      "worst_window": 0.0,
+      "p5_window": 0.0,
+      "avg_capital_deployed": 99004.81272727271,
+      "return_on_capital_pct": 3.3939763210594225,
+      "mean_p_any_allotment": 0.4883445945945946
+    }
+  ],
+  "period": [
+    "2025-04-03",
+    "2026-10-06"
+  ]
+}

@@ -1,0 +1,450 @@
+{
+  "version": "deep_mdn_20261018",
+  "created": "2026-10-18T17:17:35",
+  "protocol": "walk-forward: every model retrained each quarter on all issues that closed before it",
+  "rows": {
+    "train": 1137,
+    "valid": 239,
+    "test": 574
+  },
+  "split": {
+    "valid": "2024-07-01",
+    "test": "2025-04-01"
+  },
+  "gmp_coverage": {
+    "train": 0.256816182937555,
+    "valid": 0.6820083682008368,
+    "test": 0.6289198606271778
+  },
+  "temperature": 1.0,
+  "ensemble_size": 5,
+  "best_epochs": [
+    8,
+    10,
+    5,
+    7,
+    6
+  ],
+  "hyperparameters": {
+    "recency_half_life_years": 4.0,
+    "gmp_mask_p": 0.0,
+    "weight_decay": 0.001,
+    "d": 96,
+    "k": 4,
+    "blocks": 3,
+    "p": 0.15
+  },
+  "test_metrics": [
+    {
+      "model": "climatology",
+      "n": 574,
+      "mae_pct": 20.98467770034843,
+      "rmse_pct": 32.469708637561354,
+      "directional_acc": 0.6358885017421603,
+      "coverage80": 0.7560975609756098,
+      "crps_pct": 17.748475416182732,
+      "auc_loss": 0.47418889689978366,
+      "brier_loss": 0.25565428739082274,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 17.764455958549224,
+          "directional_acc": 0.6735751295336787,
+          "coverage80": 0.844559585492228,
+          "crps_pct": 14.242204490500862
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 22.615918635170605,
+          "directional_acc": 0.6167979002624672,
+          "coverage80": 0.7112860892388452,
+          "crps_pct": 19.52461790609507
+        }
+      }
+    },
+    {
+      "model": "gmp_only",
+      "n": 574,
+      "mae_pct": 16.538188270685026,
+      "rmse_pct": 26.258630440028597,
+      "directional_acc": 0.6602787456445993,
+      "coverage80": 0.8170731707317073,
+      "crps_pct": 14.20644992383742,
+      "auc_loss": 0.6936094907255687,
+      "brier_loss": 0.213202600830655,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 13.029553095241303,
+          "directional_acc": 0.7150259067357513,
+          "coverage80": 0.8704663212435233,
+          "crps_pct": 11.191986557255602
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 18.315528398928173,
+          "directional_acc": 0.6325459317585301,
+          "coverage80": 0.7900262467191601,
+          "crps_pct": 15.7334615504786
+        }
+      }
+    },
+    {
+      "model": "ridge",
+      "n": 574,
+      "mae_pct": 18.37416826415074,
+      "rmse_pct": 24.59101525927067,
+      "directional_acc": 0.6777003484320557,
+      "coverage80": 0.8327526132404182,
+      "crps_pct": 14.372054206108945,
+      "auc_loss": 0.7300911057219637,
+      "brier_loss": 0.20126043127856597,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 16.022539299568933,
+          "directional_acc": 0.7202072538860104,
+          "coverage80": 0.9015544041450777,
+          "crps_pct": 12.411181524854776
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 19.56541338269218,
+          "directional_acc": 0.6561679790026247,
+          "coverage80": 0.7979002624671916,
+          "crps_pct": 15.365357165379429
+        }
+      }
+    },
+    {
+      "model": "lightgbm",
+      "n": 574,
+      "mae_pct": 17.42407765177571,
+      "rmse_pct": 25.154516873456917,
+      "directional_acc": 0.6655052264808362,
+      "coverage80": 0.6550522648083623,
+      "crps_pct": 13.931790776072143,
+      "auc_loss": 0.720652815101265,
+      "brier_loss": 0.21960616018105059,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 14.651121513531795,
+          "directional_acc": 0.7409326424870466,
+          "coverage80": 0.6994818652849741,
+          "crps_pct": 11.016302905192646
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 18.828750971148615,
+          "directional_acc": 0.6272965879265092,
+          "coverage80": 0.6325459317585301,
+          "crps_pct": 15.408665209352304
+        }
+      }
+    },
+    {
+      "model": "deep_mdn",
+      "n": 574,
+      "mae_pct": 17.239762423994343,
+      "rmse_pct": 24.13068267710442,
+      "directional_acc": 0.6707317073170732,
+      "coverage80": 0.8344947735191638,
+      "crps_pct": 13.75382168245707,
+      "auc_loss": 0.7495706888641278,
+      "brier_loss": 0.19222397782125744,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 14.475121170804956,
+          "directional_acc": 0.7409326424870466,
+          "coverage80": 0.8860103626943006,
+          "crps_pct": 11.427708753733764
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 18.640223741226762,
+          "directional_acc": 0.6351706036745407,
+          "coverage80": 0.8083989501312336,
+          "crps_pct": 14.932141355012446
+        }
+      }
+    }
+  ],
+  "test_metrics_gmp_subset": [
+    {
+      "model": "climatology",
+      "n": 361,
+      "mae_pct": 23.61434903047092,
+      "rmse_pct": 33.05155897105986,
+      "directional_acc": 0.6481994459833795,
+      "coverage80": 0.7590027700831025,
+      "crps_pct": 19.028130994152047,
+      "auc_loss": 0.4402214146308635,
+      "brier_loss": 0.24965686573729434
+    },
+    {
+      "model": "gmp_only",
+      "n": 361,
+      "mae_pct": 16.54430766585375,
+      "rmse_pct": 22.636630024728568,
+      "directional_acc": 0.6869806094182825,
+      "coverage80": 0.8559556786703602,
+      "crps_pct": 13.396212344273348,
+      "auc_loss": 0.7722087623662427,
+      "brier_loss": 0.18215750815963155
+    },
+    {
+      "model": "ridge",
+      "n": 361,
+      "mae_pct": 18.542993572488086,
+      "rmse_pct": 23.98169650007865,
+      "directional_acc": 0.739612188365651,
+      "coverage80": 0.8448753462603878,
+      "crps_pct": 14.304843291964827,
+      "auc_loss": 0.8046974897368598,
+      "brier_loss": 0.17254681707237027
+    },
+    {
+      "model": "lightgbm",
+      "n": 361,
+      "mae_pct": 18.320777515540097,
+      "rmse_pct": 25.10059829229653,
+      "directional_acc": 0.7008310249307479,
+      "coverage80": 0.6454293628808865,
+      "crps_pct": 14.330111441566599,
+      "auc_loss": 0.8007268322228953,
+      "brier_loss": 0.1955118207055481
+    },
+    {
+      "model": "deep_mdn",
+      "n": 361,
+      "mae_pct": 17.791863931756968,
+      "rmse_pct": 23.667576442810663,
+      "directional_acc": 0.7313019390581718,
+      "coverage80": 0.8254847645429363,
+      "crps_pct": 14.0290393910851,
+      "auc_loss": 0.8281849384211588,
+      "brier_loss": 0.16463722905621642
+    }
+  ],
+  "test_metrics_static": [
+    {
+      "model": "climatology",
+      "n": 574,
+      "mae_pct": 21.12270034843206,
+      "rmse_pct": 33.29324192569355,
+      "directional_acc": 0.6358885017421603,
+      "coverage80": 0.7508710801393729,
+      "crps_pct": 17.931361401471158,
+      "auc_loss": 0.47263551156846045,
+      "brier_loss": 0.2632526196449127,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 17.964559585492225,
+          "directional_acc": 0.6735751295336787,
+          "coverage80": 0.8549222797927462,
+          "crps_pct": 14.416315025906737
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 22.72249343832021,
+          "directional_acc": 0.6167979002624672,
+          "coverage80": 0.6981627296587927,
+          "crps_pct": 19.711949198016914
+        }
+      }
+    },
+    {
+      "model": "gmp_only",
+      "n": 574,
+      "mae_pct": 16.65917514177387,
+      "rmse_pct": 26.920680044041855,
+      "directional_acc": 0.6585365853658537,
+      "coverage80": 0.8170731707317073,
+      "crps_pct": 14.38798525029529,
+      "auc_loss": 0.6743396473749754,
+      "brier_loss": 0.2175268363638885,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 13.152360856880302,
+          "directional_acc": 0.7098445595854922,
+          "coverage80": 0.8756476683937824,
+          "crps_pct": 11.377295724934847
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 18.435592876641216,
+          "directional_acc": 0.6325459317585301,
+          "coverage80": 0.7874015748031497,
+          "crps_pct": 15.913085193588113
+        }
+      }
+    },
+    {
+      "model": "ridge",
+      "n": 574,
+      "mae_pct": 19.215988657108348,
+      "rmse_pct": 25.082924877623125,
+      "directional_acc": 0.6742160278745645,
+      "coverage80": 0.8240418118466899,
+      "crps_pct": 14.855560979876403,
+      "auc_loss": 0.7361866684144982,
+      "brier_loss": 0.20595191817507422,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 16.136960834055664,
+          "directional_acc": 0.7409326424870466,
+          "coverage80": 0.9119170984455959,
+          "crps_pct": 12.46955178080588
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 20.775706163274137,
+          "directional_acc": 0.6404199475065617,
+          "coverage80": 0.7795275590551181,
+          "crps_pct": 16.06422180775202
+        }
+      }
+    },
+    {
+      "model": "lightgbm",
+      "n": 574,
+      "mae_pct": 18.586412099655032,
+      "rmse_pct": 26.54209892716709,
+      "directional_acc": 0.6498257839721254,
+      "coverage80": 0.6358885017421603,
+      "crps_pct": 14.614389447317947,
+      "auc_loss": 0.739601494396015,
+      "brier_loss": 0.2334145122777547,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 15.325507425389967,
+          "directional_acc": 0.7098445595854922,
+          "coverage80": 0.7046632124352331,
+          "crps_pct": 11.482426409318094
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 20.23826144908589,
+          "directional_acc": 0.6194225721784777,
+          "coverage80": 0.6010498687664042,
+          "crps_pct": 16.200921904887426
+        }
+      }
+    },
+    {
+      "model": "deep_mdn",
+      "n": 574,
+      "mae_pct": 19.468244910568615,
+      "rmse_pct": 27.510300958830108,
+      "directional_acc": 0.6480836236933798,
+      "coverage80": 0.8310104529616724,
+      "crps_pct": 15.434582659104642,
+      "auc_loss": 0.7405387690895981,
+      "brier_loss": 0.20771192757959303,
+      "by_board": {
+        "mainboard": {
+          "n": 193,
+          "mae_pct": 16.033318679684115,
+          "directional_acc": 0.694300518134715,
+          "coverage80": 0.917098445595855,
+          "crps_pct": 12.851914108733212
+        },
+        "sme": {
+          "n": 381,
+          "mae_pct": 21.208246912040295,
+          "directional_acc": 0.6246719160104987,
+          "coverage80": 0.7874015748031497,
+          "crps_pct": 16.742863578321664
+        }
+      }
+    }
+  ],
+  "lightgbm_feature_gain": [
+    {
+      "feature": "gmp_last_pct",
+      "gain": 194.97757790982723
+    },
+    {
+      "feature": "log_sub_total",
+      "gain": 165.29194462299347
+    },
+    {
+      "feature": "log_size",
+      "gain": 92.73382112383842
+    },
+    {
+      "feature": "gmp_max_pct",
+      "gain": 79.76653563976288
+    },
+    {
+      "feature": "anchor_pct",
+      "gain": 65.21083687245846
+    },
+    {
+      "feature": "heat_std10",
+      "gain": 34.21216186136007
+    },
+    {
+      "feature": "heat_board10",
+      "gain": 19.100677132606506
+    },
+    {
+      "feature": "gmp_trend_pct",
+      "gain": 13.695139229297638
+    },
+    {
+      "feature": "log_sub_nii",
+      "gain": 12.856365978717804
+    },
+    {
+      "feature": "smallcap_ret20",
+      "gain": 12.374986082315445
+    },
+    {
+      "feature": "nifty_ret60",
+      "gain": 12.015242114663124
+    },
+    {
+      "feature": "vix",
+      "gain": 11.910069927573204
+    },
+    {
+      "feature": "log_price",
+      "gain": 11.652833089232445
+    },
+    {
+      "feature": "nifty_ret20",
+      "gain": 10.056888058781624
+    },
+    {
+      "feature": "n_ipos_30d",
+      "gain": 7.66334593296051
+    },
+    {
+      "feature": "log_sub_rii",
+      "gain": 7.438717007637024
+    },
+    {
+      "feature": "nifty_vol20",
+      "gain": 6.496435925364494
+    },
+    {
+      "feature": "heat_all20",
+      "gain": 6.306101992726326
+    },
+    {
+      "feature": "log_sub_qib",
+      "gain": 5.040772959589958
+    },
+    {
+      "feature": "board_code",
+      "gain": 3.1823201179504395
+    }
+  ]
+}
