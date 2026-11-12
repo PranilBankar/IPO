@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Nav } from "@/components/nav";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           IPOPilot AI is an educational research and decision-support tool — not investment advice and not a SEBI-registered
           investment adviser. GMP is unofficial; forecasts are probabilistic and can be wrong. Official data © NSE · BSE · SEBI.
         </footer>
+        <Analytics />
       </body>
     </html>
   );
