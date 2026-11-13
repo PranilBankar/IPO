@@ -1,0 +1,22 @@
+# Install PyTorch separately for your platform first (CUDA build recommended):
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy>=2.0
+pydantic>=2.7
+requests>=2.32
+beautifulsoup4>=4.12
+lxml>=5.0
+feedparser>=6.0
+numpy>=1.26
+pandas>=2.2
+scipy>=1.13
+scikit-learn>=1.5
+lightgbm>=4.3
+torch>=2.3
+transformers>=4.44
+ortools>=9.10
+APScheduler>=3.10,<4
+pytest>=7.4
+# optional: PostgreSQL driver (set DATABASE_URL=postgresql+psycopg2://user:pass@host/db)
+psycopg2-binary>=2.9

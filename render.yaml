@@ -17,3 +17,4 @@ services:
         value: "0"
       - key: IPOPILOT_CORS_ORIGINS
         value: "https://frontend-a9248l4v9-pranilbankars-projects.vercel.app,http://localhost:3000"
+
