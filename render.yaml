@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ipopilot-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r backend/requirements.txt
+    startCommand: uvicorn ipopilot.api.app:app --host 0.0.0.0 --port $PORT --app-dir backend
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: IPOPILOT_DATA_DIR
+        value: ./data
+      - key: IPOPILOT_ENABLE_SCHEDULER
+        value: "0"
+      - key: IPOPILOT_CORS_ORIGINS
+        value: "https://frontend-a9248l4v9-pranilbankars-projects.vercel.app,http://localhost:3000"
